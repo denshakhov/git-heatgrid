@@ -1,0 +1,421 @@
+#!/usr/bin/env bash
+
+if (( BASH_VERSINFO[0] < 5 )); then
+    echo "Your bash version ($BASH_VERSION) is outdated. Upgrade it to the latest version." >&2
+    exit 1
+fi
+
+set -euo pipefail
+
+# Constants
+declare -r VERSION="1.0.0"
+declare -r SCRIPT_NAME="git-heatgrid"
+declare -r CONFIG_RELATIVE_PATH="${SCRIPT_NAME}/config.conf"
+declare -r ETC_CONFIG_FILE="/etc/${CONFIG_RELATIVE_PATH}"
+declare -r USER_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/${CONFIG_RELATIVE_PATH}"
+
+# Colors
+declare -r GREEN="\e[32m"
+declare -r CYAN="\e[36m"
+declare -r BOLD="\e[1m"
+declare -r DIM="\e[2m"
+declare -r UNDER="\e[4m"
+declare -r RESUND="\e[24m"
+declare -r RESET="\e[0m"
+
+# Themes
+declare -A theme_dark=(
+    [color_commits]="\e[38;5;245m \e[30m\e[48;5;118m \e[30m\e[48;5;40m \e[30m\e[48;5;34m \e[30m\e[48;5;29m \e[38;5;35m\e[48;5;22m"
+    [color_future]="\e[38;5;239m"
+    [color_year]="\e[1;97;44m"
+    [color_year_padding]=""
+    [color_month]=""
+    [color_dow]="\e[38;5;245m"
+    [color_author]="\e[1;32m"
+
+    [symbol_no_commits]="·  "
+    [symbol_has_commits]="   "
+    [symbol_future]="·  "
+    [symbol_year_padding]="   "
+)
+
+declare -A theme_light=(
+    [color_commits]="\e[38;5;242m \e[30m\e[48;5;151m \e[30m\e[48;5;149m \e[30m\e[48;5;71m \e[30m\e[48;5;28m \e[38;5;71m\e[48;5;22m"
+    [color_future]="\e[38;5;252m"
+    [color_year]="\e[1m\e[48;5;99m\e[38;5;231m"
+    [color_year_padding]=""
+    [color_month]="\e[30m"
+    [color_dow]="\e[38;5;245m"
+    [color_author]="\e[1;32m"
+
+    [symbol_no_commits]="·  "
+    [symbol_has_commits]="   "
+    [symbol_future]="·  "
+    [symbol_year_padding]="   "
+)
+
+declare -A theme_8colors=(
+    [color_commits]="\e[37m \e[30;47m \e[30;46m \e[30;45m \e[30;44m \e[30;43m \e[30;42m \e[30;41m"
+    [color_future]="\e[2m"
+    [color_year]="\e[37;44m"
+    [color_year_padding]=""
+    [color_month]=""
+    [color_dow]="\e[2m"
+    [color_author]="\e[32m"
+
+    [symbol_no_commits]="·  "
+    [symbol_has_commits]="   "
+    [symbol_future]="·  "
+    [symbol_year_padding]="   "
+)
+
+# Text
+i18n_day_of_week=("Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun")
+i18n_months=("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec")
+i18n_search_no_result="Nothing found"
+i18n_author="Author"
+i18n_committer="Committer"
+i18n_legend_title="COMMITS"
+
+# Config
+config_show_commits=false
+config_show_legend=false
+config_show_days_of_month=false
+config_show_empty_years=true
+config_years=0
+config_authors=()
+config_committers=()
+config_weeks_start=1
+config_cell_width=2
+config_repo_path="."
+config_theme_name="dark"
+
+function main() {
+    load_config_file "$ETC_CONFIG_FILE"
+    load_config_file "$USER_CONFIG_FILE"
+    parse_args "$@"
+    validate_config
+
+    print_legend
+    print_author
+    print_years
+    echo
+}
+
+function usage() {
+    echo -ne "
+${BOLD}${SCRIPT_NAME} ${VERSION}${RESET}
+Visualize git commits as a calendar heatmap.
+
+${BOLD}USAGE${RESET}
+    ${SCRIPT_NAME} [OPTIONS] [REPOSITORY]
+
+${BOLD}ARGUMENTS${RESET}
+    ${GREEN}REPOSITORY${RESET}  ${DIM}Path to the git repository (default: current directory)${RESET}
+
+${BOLD}OPTIONS${RESET}
+    ${GREEN}-a ${UNDER}pattern${RESET} ${DIM}Limit the commits output to ones with author header lines that
+               match the specified ${UNDER}pattern${RESUND} (regular expression). With more than
+               one -a, commits whose author matches any of the given
+               patterns are chosen.${RESET}
+    ${GREEN}-c ${RESET}        ${DIM}Show number of commits${RESET}
+    ${GREEN}-d ${RESET}        ${DIM}Show days of month (Use it with -w3 for better readability)${RESET}
+    ${GREEN}-e ${RESET}        ${DIM}Hide years without commits${RESET}
+    ${GREEN}-l ${RESET}        ${DIM}Show the legend${RESET}
+    ${GREEN}-m ${UNDER}pattern${RESET} ${DIM}Same as -a option but for a committer${RESET}
+    ${GREEN}-s ${UNDER}number${RESET}  ${DIM}Weeks start on ${UNDER}number${RESUND} (default: 1, available: 1 .. 7,
+               1 is Monday and 7 is Sunday)${RESET}
+    ${GREEN}-t ${UNDER}name${RESET}    ${DIM}Theme ${UNDER}name${RESUND} (default: dark, available: dark, light, 8colors)${RESET}
+    ${GREEN}-w ${UNDER}number${RESET}  ${DIM}Cell width (default: 2, available: 2, 3)${RESET}
+    ${GREEN}-y ${UNDER}number${RESET}  ${DIM}Number of years to print (default: 0 - all)${RESET}
+
+    ${GREEN}-h ${RESET}        ${DIM}Display this help and exit${RESET}
+    ${GREEN}-V ${RESET}        ${DIM}Output version information and exit${RESET}
+
+${BOLD}FILES${RESET}
+    The configuration files are read in the order given below, with last value
+    found taking precedence over values read earlier.
+
+    ${BOLD}${ETC_CONFIG_FILE}${RESET} $(get_config_status "$ETC_CONFIG_FILE")
+        ${DIM}System-wide configuration file.${RESET}
+
+    ${BOLD}\$XDG_CONFIG_HOME/${CONFIG_RELATIVE_PATH}${RESET} $(get_config_status "$USER_CONFIG_FILE")
+        ${DIM}User-specific configuration file. When the XDG_CONFIG_HOME environment
+        variable is not set or empty, \$HOME/.config${DIM} is used as \$XDG_CONFIG_HOME.${RESET}
+
+${BOLD}EXAMPLES${RESET}
+    ${DIM}# Show heatmaps for the repository in the current directory for all years${RESET}
+    ${SCRIPT_NAME}
+    ${DIM}# Show heatmaps for the last two years${RESET}
+    ${SCRIPT_NAME} -y 2
+    ${DIM}# Print days of month with wide cells for better readability${RESET}
+    ${SCRIPT_NAME} -dw3
+
+${BOLD}REPOSITORY${RESET}
+    https://github.com/denshakhov/${SCRIPT_NAME}
+\n"
+    exit 1
+}
+
+function get_config_status() {
+    [[ -e "$1" ]] && echo -ne "${GREEN}(exists)${RESET}" || echo -ne "${CYAN}(missing)${RESET}"
+}
+
+function version() {
+    echo -e "${SCRIPT_NAME} ${BOLD}${VERSION}${RESET}"
+    exit 0
+}
+
+function die() {
+    echo -e "$@" >&2
+    exit 1
+}
+
+function load_config_file() {
+    if [[ -e "$1" ]]; then
+        source "$1"
+    fi
+}
+
+function validate_uint() {
+    local arg_name="$1" value="$2" min_incl="$3" max_incl="$4"
+
+    if ! [[ "$value" == +([[:digit:]]) && $value -ge $min_incl && $value -le $max_incl ]]; then
+        die "Error: Option \"$arg_name\" must be an integer between $min_incl and $max_incl."
+    fi
+}
+
+function parse_args() {
+    local positional_args=()
+
+    while [[ $OPTIND -le "$#" ]]; do
+        if getopts :a:m:cdels:t:w:y:hV option; then
+            case "$option" in
+                a) config_authors+=("$OPTARG") ;;
+                m) config_committers+=("$OPTARG") ;;
+                c) config_show_commits=true ;;
+                d) config_show_days_of_month=true ;;
+                e) config_show_empty_years=false ;;
+                l) config_show_legend=true ;;
+                s) config_weeks_start="$OPTARG" ;;
+                t) config_theme_name="$OPTARG" ;;
+                w) config_cell_width="$OPTARG" ;;
+                y) config_years="$OPTARG" ;;
+                h) usage ;;
+                V) version ;;
+                :) die "Error: Option -$OPTARG requires an argument" ;;
+                \?) die "Invalid option: -$OPTARG\nRun \"$SCRIPT_NAME -h\" to get help" ;;
+            esac
+        else
+            positional_args+=("${!OPTIND}")
+            (( OPTIND++ ))
+        fi
+    done
+
+    config_repo_path="${positional_args[0]:-.}"
+}
+
+function validate_config() {
+    validate_uint "cell_width" "$config_cell_width" 2 3
+    validate_uint "weeks_start" "$config_weeks_start" 1 7
+    validate_uint "years" "$config_years" 0 99
+
+    if (( ${#config_authors[@]} && ${#config_committers[@]} )); then
+        die "Error: You can't filter by author and committer at the same time"
+    fi
+
+    if [[ $config_theme_name =~ ^[a-z0-9_]+$ ]]; then
+        if [[ "$(declare -p "theme_$config_theme_name" 2> /dev/null)" != "declare -A"* ]]; then
+            die "Error: Theme \"$config_theme_name\" doesn't exist"
+        fi
+
+        declare -ng theme=theme_$config_theme_name
+    else
+        die "Error: Invalid theme name"
+    fi
+
+    if [[ ! -d "${config_repo_path}/.git" ]]; then
+        die "Error: The specified directory was not found or is not a git repository"
+    fi
+
+    # Split the string into the COMMIT_COLORS array
+    # "<<< here string" adds trailing new line, so we delete it with "unset"
+    readarray -td " " -n 10 COMMIT_COLORS <<< "${theme[color_commits]} "
+    unset 'COMMIT_COLORS[-1]'
+    COMMIT_COLORS_COUNT="${#COMMIT_COLORS[@]}"
+
+    read -r CURRENT_YEAR CURRENT_DAY <<< "$(date +"%Y %-j")"
+}
+
+function get_commits_per_day() {
+    local value git_options=()
+
+    if (( ${#config_authors[@]} )); then
+        for value in "${config_authors[@]}"; do git_options+=(--author="$value"); done
+        git_options+=(--pretty=format:'%ad')
+    else
+        for value in "${config_committers[@]}"; do git_options+=(--committer="$value"); done
+        git_options+=(--pretty=format:'%cd')
+    fi
+
+    if (( config_years != 0 )); then
+        git_options+=(--since="$(( CURRENT_YEAR - config_years + 1 ))-01-01")
+    fi
+
+    # We process all commits at once, because it's much faster than processing them year by year
+    # The git output must be sorted, as the dates can sometimes be out of order
+    # Git returns a string formatted as "commits_count year day_of_year"
+    git -C "$config_repo_path" log "${git_options[@]}" --date=format:'%Y %-j' | sort -nr | uniq -c
+}
+
+function print_years() {
+    local i start_year="$(( CURRENT_YEAR + 1 ))"
+    local prev_year="$start_year"
+
+    while read -r commits_count year day_of_year || [ -z "$day_of_year" ]; do
+        if (( prev_year != year )); then
+            # Printed at the end of each year
+            # We also read the last empty line added by <<< "here string"
+            if (( prev_year != start_year )) || [[ -z "$day_of_year" ]]; then
+                if (( prev_year != start_year )); then
+                    print_year "$prev_year";
+                else
+                    echo -ne "\n${DIM}${i18n_search_no_result}${RESET}\n"
+                fi
+
+                if [[ -z "$day_of_year" ]]; then break; fi
+            fi
+
+            # Print years without commits
+            if [[ $config_show_empty_years == true ]]; then
+                for (( i = prev_year - 1; i > year; i-- )); do
+                    init_year "$i"
+                    print_year "$i"
+                done
+            fi
+
+            # Initialization at the start of each year
+            init_year "$year"
+        fi
+
+        (( commits_per_day[year_start_padding + day_of_year - 1] = commits_count, prev_year = year ))
+    done <<< "$(get_commits_per_day)"
+}
+
+function init_year() {
+    local i year_start_day_of_week year="$1"
+
+    # Set global variables
+    leap_days=$(( year % 4 == 0 ? 1 : 0 )) # Valid only for 1901 - 2099 years
+    year_start_day_of_week=$(date --date="$year-01-01" +%u) # Day of week (1..7); 1 is Monday
+    year_start_padding=$(( (year_start_day_of_week - config_weeks_start + 7) % 7 ))
+    year_end_padding=$(( 6 - year_start_padding - leap_days ))
+    total_days_padded=$(( year_start_padding + 365 + leap_days + year_end_padding ))
+    commits_per_day=()
+
+    if [[ $config_show_days_of_month == true ]]; then
+        readarray -O "$year_start_padding" -t months_days <<< "$(printf "$year-01-01 + %s days\n" {0..365} | date +%-d -f-)"
+    fi
+
+    # Add paddings at the start and end of the year
+    for (( i = 0; i < year_start_padding; i++ )); do commits_per_day[i]="x"; done
+    for (( i = total_days_padded - year_end_padding; i < total_days_padded; i++ )); do commits_per_day[i]="x"; done
+}
+
+function print_year() {
+    local year="$1"
+
+    echo -ne "\n${theme[color_year]} $year ${RESET} "
+    print_month_bar "$year_start_padding" "$leap_days"
+
+    for dow in {0..6}; do
+        local dow_name="${i18n_day_of_week[(dow + config_weeks_start - 1) % 7]:0:4}"
+
+        printf "${theme[color_dow]}%*s%s  ${RESET}" $(( 5 - ${#dow_name} )) "" "$dow_name"
+
+        for (( day_index = dow; day_index < total_days_padded; day_index += 7 )); do
+            local commits="${commits_per_day[day_index]:-0}"
+            local text="${theme[symbol_no_commits]}"
+            local color=""
+
+            if [[ $commits == "x" ]]; then
+                text="${theme[symbol_year_padding]}"
+                color="${theme[color_year_padding]}"
+            else
+                if (( year == CURRENT_YEAR && (day_index - year_start_padding + 1) > CURRENT_DAY )); then
+                    text="${theme[symbol_future]}"
+                    color="${theme[color_future]}"
+                else
+                    color="${COMMIT_COLORS[commits >= COMMIT_COLORS_COUNT ? COMMIT_COLORS_COUNT - 1 : commits]}"
+                fi
+
+                if [[ $config_show_days_of_month == true ]]; then
+                    # We don't align it to the right because it will cause the month bar to appear misaligned
+                    text="${months_days[day_index]:-0}"
+                elif (( commits != 0 )); then
+                    text="${theme[symbol_has_commits]}"
+
+                    if [[ $config_show_commits == true ]]; then
+                        if (( commits > 9 && config_cell_width == 2 )); then
+                            text="9+"
+                        elif (( commits > 99 && config_cell_width == 3 )); then
+                            text="99+"
+                        else
+                            text="$commits"
+                        fi
+                    fi
+                fi
+            fi
+
+            printf "${color}%-${config_cell_width}s${RESET}" "${text:0:$config_cell_width}"
+        done
+
+        echo
+    done
+}
+
+function print_month_bar() {
+    local year_start_padding="$1" leap_days="$2"
+    local days_in_month=(31 "$(( 28 + leap_days ))" 31 30 31 30 31 31 30 31 30 31)
+    local days_sum=$year_start_padding
+    local prev_week_number=0
+
+    for month in {0..11}; do
+        local next_week_number=$(( days_sum += days_in_month[month], days_sum / 7 ))
+
+        printf "${theme[color_month]}%s%*s${RESET}" "${i18n_months[month]}" $(( (next_week_number - prev_week_number) * config_cell_width - ${#i18n_months[month]} )) ""
+        prev_week_number=$next_week_number
+    done
+
+    echo
+}
+
+function print_author() {
+    if (( ${#config_authors[@]} )); then
+        printf "\n${theme[color_author]}${i18n_author}:${RESET} %s" "${config_authors[@]}"
+        echo
+    elif (( ${#config_committers[@]} )); then
+        printf "\n${theme[color_author]}${i18n_committer}:${RESET} %s" "${config_committers[@]}"
+        echo
+    fi
+}
+
+function print_legend() {
+    [[ $config_show_legend != true ]] && return
+
+    echo -ne "\n${BOLD}${i18n_legend_title}${RESET}\n"
+
+    for (( i = 0; i < COMMIT_COLORS_COUNT - 1; i++ )); do
+        echo -n "$i "
+    done
+
+    echo "$((COMMIT_COLORS_COUNT - 1))+"
+
+    for (( i = 0; i < COMMIT_COLORS_COUNT; i++ )); do
+        echo -ne "${COMMIT_COLORS[i]}  ${RESET}"
+    done
+
+    echo
+}
+
+main "$@"
