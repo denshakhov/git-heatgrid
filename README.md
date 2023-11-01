@@ -36,6 +36,15 @@ curl https://raw.githubusercontent.com/denshakhov/git-heatgrid/main/git-heatgrid
 chmod +x ~/.local/bin/git-heatgrid
 ```
 
+### Arch Linux
+
+AUR package: [git-heatgrid](https://aur.archlinux.org/packages/git-heatgrid)
+
+```bash
+yay -S git-heatgrid
+```
+Example config: `/usr/share/doc/git-heatgrid/config.conf.example`
+
 ## Usage
 
 ```bash
