@@ -213,6 +213,9 @@ function parse_args() {
     done
 
     config_repo_path="${positional_args[0]:-.}"
+    if [[ $config_repo_path == . ]]; then
+        config_repo_path="$(git rev-parse --show-toplevel 2> /dev/null || echo .)"
+    fi
 }
 
 function validate_config() {
