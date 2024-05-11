@@ -77,6 +77,7 @@ OPTIONS
     -c         Show number of commits
     -d         Show days of month (Use it with -w3 for better readability)
     -e         Hide years without commits
+    -g         Gap between months (default: 0, recommended: >= 4)
     -l         Show the legend
     -m pattern Same as -a option but for a committer
     -s number  Weeks start on number (default: 1, available: 1 .. 7,

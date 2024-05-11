@@ -89,6 +89,7 @@ config_weeks_start=1
 config_cell_width=2
 config_repo_path="."
 config_theme_name="dark"
+config_months_gap=0
 
 function main() {
     load_config_file "$ETC_CONFIG_FILE"
@@ -121,6 +122,7 @@ ${BOLD}OPTIONS${RESET}
     ${GREEN}-c ${RESET}        ${DIM}Show number of commits${RESET}
     ${GREEN}-d ${RESET}        ${DIM}Show days of month (Use it with -w3 for better readability)${RESET}
     ${GREEN}-e ${RESET}        ${DIM}Hide years without commits${RESET}
+    ${GREEN}-g ${UNDER}number${RESET}  ${DIM}Gap between months (default: 0, recommended: >= 4)${RESET}
     ${GREEN}-l ${RESET}        ${DIM}Show the legend${RESET}
     ${GREEN}-m ${UNDER}pattern${RESET} ${DIM}Same as -a option but for a committer${RESET}
     ${GREEN}-s ${UNDER}number${RESET}  ${DIM}Weeks start on ${UNDER}number${RESUND} (default: 1, available: 1 .. 7,
@@ -189,13 +191,14 @@ function parse_args() {
     local positional_args=()
 
     while [[ $OPTIND -le "$#" ]]; do
-        if getopts :a:m:cdels:t:w:y:hV option; then
+        if getopts :a:m:cdeg:ls:t:w:y:hV option; then
             case "$option" in
                 a) config_authors+=("$OPTARG") ;;
                 m) config_committers+=("$OPTARG") ;;
                 c) config_show_commits=true ;;
                 d) config_show_days_of_month=true ;;
                 e) config_show_empty_years=false ;;
+                g) config_months_gap="$OPTARG" ;;
                 l) config_show_legend=true ;;
                 s) config_weeks_start="$OPTARG" ;;
                 t) config_theme_name="$OPTARG" ;;
@@ -222,6 +225,7 @@ function validate_config() {
     validate_uint "cell_width" "$config_cell_width" 2 3
     validate_uint "weeks_start" "$config_weeks_start" 1 7
     validate_uint "years" "$config_years" 0 99
+    validate_uint "month_gap" "$config_months_gap" 0 32
 
     if (( ${#config_authors[@]} && ${#config_committers[@]} )); then
         die "Error: You can't filter by author and committer at the same time"
@@ -316,7 +320,7 @@ function init_year() {
     total_days_padded=$(( year_start_padding + 365 + leap_days + year_end_padding ))
     commits_per_day=()
 
-    if [[ $config_show_days_of_month == true ]]; then
+    if [[ $config_show_days_of_month == true || $config_months_gap != 0 ]]; then
         readarray -O "$year_start_padding" -t months_days <<< "$(printf "$year-01-01 + %s days\n" {0..365} | date +%-d -f-)"
     fi
 
@@ -340,6 +344,11 @@ function print_year() {
             local commits="${commits_per_day[day_index]:-0}"
             local text="${theme[symbol_no_commits]}"
             local color=""
+            local months_gap_text=""
+
+            if [[ $config_months_gap != 0 && $commits != "x" ]] && (( day_index != dow && months_days[day_index] < months_days[day_index - 7] )); then
+                printf -v months_gap_text "%*s" "$config_months_gap"
+            fi
 
             if [[ $commits == "x" ]]; then
                 text="${theme[symbol_year_padding]}"
@@ -370,7 +379,7 @@ function print_year() {
                 fi
             fi
 
-            printf "${color}%-${config_cell_width}s${RESET}" "${text:0:$config_cell_width}"
+            printf "${months_gap_text}${color}%-${config_cell_width}s${RESET}" "${text:0:$config_cell_width}"
         done
 
         echo
@@ -385,8 +394,9 @@ function print_month_bar() {
 
     for month in {0..11}; do
         local next_week_number=$(( days_sum += days_in_month[month], days_sum / 7 ))
+        local month_padding=$(( (next_week_number - prev_week_number) * config_cell_width + config_months_gap - ${#i18n_months[month]} ))
 
-        printf "${theme[color_month]}%s%*s${RESET}" "${i18n_months[month]}" $(( (next_week_number - prev_week_number) * config_cell_width - ${#i18n_months[month]} )) ""
+        printf "${theme[color_month]}%s%*s${RESET}" "${i18n_months[month]}" $month_padding ""
         prev_week_number=$next_week_number
     done
 
