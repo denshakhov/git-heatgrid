@@ -74,6 +74,9 @@ OPTIONS
                match the specified pattern (regular expression). With more than
                one -a, commits whose author matches any of the given
                patterns are chosen.
+    -b number  Breakpoints multiplier, allows quickly adjust breakpoints
+               for repos with a lot of commits per day, first two breakpoints
+               aren't affected by the multiplier (default: 1)
     -c         Show number of commits
     -d         Show days of month (Use it with -w3 for better readability)
     -e         Hide years without commits

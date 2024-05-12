@@ -25,6 +25,7 @@ declare -r RESET="\e[0m"
 
 # Themes
 declare -A theme_dark=(
+    [color_breakpoints]="0 1 2 4 8 16"
     [color_commits]="\e[38;5;245m \e[30m\e[48;5;118m \e[30m\e[48;5;40m \e[30m\e[48;5;34m \e[30m\e[48;5;29m \e[38;5;35m\e[48;5;22m"
     [color_future]="\e[38;5;239m"
     [color_year]="\e[1;97;44m"
@@ -40,6 +41,7 @@ declare -A theme_dark=(
 )
 
 declare -A theme_light=(
+    [color_breakpoints]="0 1 2 4 8 16"
     [color_commits]="\e[38;5;242m \e[30m\e[48;5;151m \e[30m\e[48;5;149m \e[30m\e[48;5;71m \e[30m\e[48;5;28m \e[38;5;71m\e[48;5;22m"
     [color_future]="\e[38;5;252m"
     [color_year]="\e[1m\e[48;5;99m\e[38;5;231m"
@@ -55,6 +57,7 @@ declare -A theme_light=(
 )
 
 declare -A theme_8colors=(
+    [color_breakpoints]="0 1 2 4 8 16 24 32"
     [color_commits]="\e[37m \e[30;47m \e[30;46m \e[30;45m \e[30;44m \e[30;43m \e[30;42m \e[30;41m"
     [color_future]="\e[2m"
     [color_year]="\e[37;44m"
@@ -90,6 +93,7 @@ config_cell_width=2
 config_repo_path="."
 config_theme_name="dark"
 config_months_gap=0
+config_breakpoints_multiplier=1
 
 function main() {
     load_config_file "$ETC_CONFIG_FILE"
@@ -119,6 +123,9 @@ ${BOLD}OPTIONS${RESET}
                match the specified ${UNDER}pattern${RESUND} (regular expression). With more than
                one -a, commits whose author matches any of the given
                patterns are chosen.${RESET}
+    ${GREEN}-b ${UNDER}number${RESET}  ${DIM}Breakpoints multiplier, allows quickly adjust breakpoints
+               for repos with a lot of commits per day, first two breakpoints
+               aren't affected by the multiplier (default: 1) ${RESET}
     ${GREEN}-c ${RESET}        ${DIM}Show number of commits${RESET}
     ${GREEN}-d ${RESET}        ${DIM}Show days of month (Use it with -w3 for better readability)${RESET}
     ${GREEN}-e ${RESET}        ${DIM}Hide years without commits${RESET}
@@ -191,9 +198,10 @@ function parse_args() {
     local positional_args=()
 
     while [[ $OPTIND -le "$#" ]]; do
-        if getopts :a:m:cdeg:ls:t:w:y:hV option; then
+        if getopts :a:b:m:cdeg:ls:t:w:y:hV option; then
             case "$option" in
                 a) config_authors+=("$OPTARG") ;;
+                b) config_breakpoints_multiplier="$OPTARG" ;;
                 m) config_committers+=("$OPTARG") ;;
                 c) config_show_commits=true ;;
                 d) config_show_days_of_month=true ;;
@@ -226,6 +234,7 @@ function validate_config() {
     validate_uint "weeks_start" "$config_weeks_start" 1 7
     validate_uint "years" "$config_years" 0 99
     validate_uint "month_gap" "$config_months_gap" 0 32
+    validate_uint "breakpoints_multiplier" "$config_breakpoints_multiplier" 1 10
 
     if (( ${#config_authors[@]} && ${#config_committers[@]} )); then
         die "Error: You can't filter by author and committer at the same time"
@@ -247,9 +256,22 @@ function validate_config() {
 
     # Split the string into the COMMIT_COLORS array
     # "<<< here string" adds trailing new line, so we delete it with "unset"
-    readarray -td " " -n 10 COMMIT_COLORS <<< "${theme[color_commits]} "
+    readarray -td " " COMMIT_COLORS <<< "${theme[color_commits]} "
     unset 'COMMIT_COLORS[-1]'
     COMMIT_COLORS_COUNT="${#COMMIT_COLORS[@]}"
+
+    if [[ -z "${theme[color_breakpoints]:-}" ]]; then
+        theme[color_breakpoints]=$(eval echo -n "{0..$(( COMMIT_COLORS_COUNT - 1 ))}")
+        echo "WARNING: Add breakpoints to your theme"
+    fi
+
+    readarray -td " " BREAKPOINTS <<< "${theme[color_breakpoints]} "
+    unset 'BREAKPOINTS[-1]'
+    BREAKPOINTS_COUNT="${#BREAKPOINTS[@]}"
+
+    if (( COMMIT_COLORS_COUNT != BREAKPOINTS_COUNT )); then
+        die "Error: The number of breakpoints must match the number of colors"
+    fi
 
     read -r CURRENT_YEAR CURRENT_DAY <<< "$(date +"%Y %-j")"
 }
@@ -358,7 +380,14 @@ function print_year() {
                     text="${theme[symbol_future]}"
                     color="${theme[color_future]}"
                 else
-                    color="${COMMIT_COLORS[commits >= COMMIT_COLORS_COUNT ? COMMIT_COLORS_COUNT - 1 : commits]}"
+                    color="${COMMIT_COLORS[COMMIT_COLORS_COUNT - 1]}"
+
+                    for (( i = COMMIT_COLORS_COUNT - 1; i >= 0; i-- )); do
+                        if (( commits >= (i < 2 ? BREAKPOINTS[i] : BREAKPOINTS[i] * config_breakpoints_multiplier) )); then
+                            color="${COMMIT_COLORS[i]}"
+                            break
+                        fi
+                    done
                 fi
 
                 if [[ $config_show_days_of_month == true ]]; then
@@ -418,17 +447,9 @@ function print_legend() {
 
     echo -ne "\n${BOLD}${i18n_legend_title}${RESET}\n"
 
-    for (( i = 0; i < COMMIT_COLORS_COUNT - 1; i++ )); do
-        echo -n "$i "
-    done
-
-    echo "$((COMMIT_COLORS_COUNT - 1))+"
-
     for (( i = 0; i < COMMIT_COLORS_COUNT; i++ )); do
-        echo -ne "${COMMIT_COLORS[i]}  ${RESET}"
+        echo -e "${COMMIT_COLORS[i]}    ${RESET} $(( i < 2 ? BREAKPOINTS[i] : BREAKPOINTS[i] * config_breakpoints_multiplier ))+"
     done
-
-    echo
 }
 
 main "$@"
