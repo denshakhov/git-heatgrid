@@ -8,7 +8,7 @@ fi
 set -euo pipefail
 
 # Constants
-declare -r VERSION="1.0.0"
+declare -r VERSION="1.1.0"
 declare -r SCRIPT_NAME="git-heatgrid"
 declare -r CONFIG_RELATIVE_PATH="${SCRIPT_NAME}/config.conf"
 declare -r ETC_CONFIG_FILE="/etc/${CONFIG_RELATIVE_PATH}"

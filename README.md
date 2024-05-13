@@ -16,6 +16,7 @@
 - Fast (all commits processed at once)
 - Themes: **dark, light, 8colors** + you can create your own themes
 - Customizable (See [Configuration](#configuration))
+- Customizable color breakpoints
 - Filtering by author and committer
 
 ## Dependencies
