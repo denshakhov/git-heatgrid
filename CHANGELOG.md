@@ -19,6 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release.
 
-[unreleased]: https://github.com/denshakhov/git-heatgrid/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/denshakhov/git-heatgrid/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/denshakhov/git-heatgrid/releases/tag/v1.0.0
+[unreleased]: https://github.com/denshakhov/git-heatgrid/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/denshakhov/git-heatgrid/compare/1.0.0...1.1.0
+[1.0.0]: https://github.com/denshakhov/git-heatgrid/releases/tag/1.0.0
