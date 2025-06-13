@@ -336,7 +336,7 @@ function init_year() {
 
     # Set global variables
     leap_days=$(( year % 4 == 0 ? 1 : 0 )) # Valid only for 1901 - 2099 years
-    year_start_day_of_week=$(date --date="$year-01-01" +%u) # Day of week (1..7); 1 is Monday
+    year_start_day_of_week=$(get_first_day_of_year "$1") # Day of week (1..7); 1 is Monday
     year_start_padding=$(( (year_start_day_of_week - config_weeks_start + 7) % 7 ))
     year_end_padding=$(( 6 - year_start_padding - leap_days ))
     total_days_padded=$(( year_start_padding + 365 + leap_days + year_end_padding ))
@@ -349,6 +349,23 @@ function init_year() {
     # Add paddings at the start and end of the year
     for (( i = 0; i < year_start_padding; i++ )); do commits_per_day[i]="x"; done
     for (( i = total_days_padded - year_end_padding; i < total_days_padded; i++ )); do commits_per_day[i]="x"; done
+}
+
+get_first_day_of_year() {
+    local year=$1
+    local day_of_week # Variable to store the result
+
+    # Check if this is GNU date (usually Linux)
+    # Redirect stdout and stderr to /dev/null to suppress any output
+    if date --version >/dev/null 2>&1; then
+        # Use GNU version
+        day_of_week=$(date --date="$year-01-01" +%u)
+    else
+        # Use BSD version (zsh etc)
+        day_of_week=$(date -j -f "%Y-%m-%d" "$year-01-01" "+%u")
+    fi
+
+    echo "$day_of_week"
 }
 
 function print_year() {
