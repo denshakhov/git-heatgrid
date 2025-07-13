@@ -24,6 +24,7 @@ declare -r RESUND="\e[24m"
 declare -r RESET="\e[0m"
 
 # Themes
+# shellcheck disable=SC2034
 declare -A theme_dark=(
     [color_breakpoints]="0 1 2 4 8 16"
     [color_commits]="\e[38;5;245m \e[30m\e[48;5;118m \e[30m\e[48;5;40m \e[30m\e[48;5;34m \e[30m\e[48;5;29m \e[38;5;35m\e[48;5;22m"
@@ -40,6 +41,7 @@ declare -A theme_dark=(
     [symbol_year_padding]="   "
 )
 
+# shellcheck disable=SC2034
 declare -A theme_light=(
     [color_breakpoints]="0 1 2 4 8 16"
     [color_commits]="\e[38;5;242m \e[30m\e[48;5;151m \e[30m\e[48;5;149m \e[30m\e[48;5;71m \e[30m\e[48;5;28m \e[38;5;71m\e[48;5;22m"
@@ -56,6 +58,7 @@ declare -A theme_light=(
     [symbol_year_padding]="   "
 )
 
+# shellcheck disable=SC2034
 declare -A theme_8colors=(
     [color_breakpoints]="0 1 2 4 8 16 24 32"
     [color_commits]="\e[37m \e[30;47m \e[30;46m \e[30;45m \e[30;44m \e[30;43m \e[30;42m \e[30;41m"
@@ -182,6 +185,7 @@ function die() {
 
 function load_config_file() {
     if [[ -e "$1" ]]; then
+        # shellcheck disable=SC1090
         source "$1"
     fi
 }
@@ -386,6 +390,7 @@ function print_year() {
             local months_gap_text=""
 
             if [[ $config_months_gap != 0 && $commits != "x" ]] && (( day_index != dow && months_days[day_index] < months_days[day_index - 7] )); then
+                # shellcheck disable=SC2183
                 printf -v months_gap_text "%*s" "$config_months_gap"
             fi
 
