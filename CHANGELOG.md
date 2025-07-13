@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Improve portability by removing dependency on the `date` utility
+- Improve macOS compatibility (by **[@MartinLyne](https://github.com/MartinLyne)**)
+
 ## [1.1.0] - 2024-05-13
 
 ### Added

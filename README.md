@@ -12,6 +12,7 @@
 
 ## Features
 
+- Supported platforms: Linux, macOS
 - Written in bash with a minimum of dependencies
 - Fast (all commits processed at once)
 - Themes: **dark, light, 8colors** + you can create your own themes
@@ -24,7 +25,7 @@
 Most likely you already have all these utils installed.
 
 - bash 5.0+
-- coreutils (date, sort, uniq)
+- coreutils (sort, uniq)
 - git
 
 ## Installation

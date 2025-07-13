@@ -277,7 +277,7 @@ function validate_config() {
         die "Error: The number of breakpoints must match the number of colors"
     fi
 
-    read -r CURRENT_YEAR CURRENT_DAY <<< "$(date +"%Y %-j")"
+    read -r CURRENT_YEAR CURRENT_DAY <<< "$(printf '%(%Y %-j)T\n' -1)"
 }
 
 function get_commits_per_day() {
@@ -297,7 +297,7 @@ function get_commits_per_day() {
 
     # We process all commits at once, because it's much faster than processing them year by year
     # The git output must be sorted, as the dates can sometimes be out of order
-    # Git returns a string formatted as "commits_count year day_of_year"
+    # Returns lines formatted as "commits_count year day_of_year"
     git -C "$config_repo_path" log "${git_options[@]}" --date=format:'%Y %-j' | sort -nr | uniq -c
 }
 
@@ -340,14 +340,14 @@ function init_year() {
 
     # Set global variables
     leap_days=$(( year % 4 == 0 ? 1 : 0 )) # Valid only for 1901 - 2099 years
-    year_start_day_of_week=$(get_first_day_of_year "$1") # Day of week (1..7); 1 is Monday
+    year_start_day_of_week=$(get_dow_of_first_doy "$year") # Day of week (1..7); 1 is Monday
     year_start_padding=$(( (year_start_day_of_week - config_weeks_start + 7) % 7 ))
     year_end_padding=$(( 6 - year_start_padding - leap_days ))
     total_days_padded=$(( year_start_padding + 365 + leap_days + year_end_padding ))
     commits_per_day=()
 
     if [[ $config_show_days_of_month == true || $config_months_gap != 0 ]]; then
-        readarray -O "$year_start_padding" -t months_days <<< "$(printf "$year-01-01 + %s days\n" {0..365} | date +%-d -f-)"
+        readarray -O "$year_start_padding" -t months_days <<< "$(get_days_of_month $leap_days)"
     fi
 
     # Add paddings at the start and end of the year
@@ -355,21 +355,25 @@ function init_year() {
     for (( i = total_days_padded - year_end_padding; i < total_days_padded; i++ )); do commits_per_day[i]="x"; done
 }
 
-get_first_day_of_year() {
-    local year=$1
-    local day_of_week # Variable to store the result
+# Cross-platform method to determine the day of the week for January 1st
+# Use the simplified Zeller's congruence algorithm https://en.wikipedia.org/wiki/Zeller%27s_congruence
+# Returns the day of the week (1..7), 1 is Monday
+function get_dow_of_first_doy() {
+    local year="$1"
+    local y=$(( year - 1 ))
+    local h=$(( (37 + y + y/4 - y/100 + y/400) % 7 ))
 
-    # Check if this is GNU date (usually Linux)
-    # Redirect stdout and stderr to /dev/null to suppress any output
-    if date --version >/dev/null 2>&1; then
-        # Use GNU version
-        day_of_week=$(date --date="$year-01-01" +%u)
-    else
-        # Use BSD version (zsh etc)
-        day_of_week=$(date -j -f "%Y-%m-%d" "$year-01-01" "+%u")
-    fi
+    echo $(( (h + 5) % 7 + 1 ))
+}
 
-    echo "$day_of_week"
+# Cross-platform way to get the days of a month
+function get_days_of_month() {
+    local leap_days="$1"
+    local days_in_month=(31 "$(( 28 + leap_days ))" 31 30 31 30 31 31 30 31 30 31)
+
+    for n in "${days_in_month[@]}"; do
+        for (( i = 1; i <= n; i++ )); do echo "$i"; done
+    done
 }
 
 function print_year() {
