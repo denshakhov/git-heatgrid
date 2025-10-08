@@ -120,6 +120,7 @@ curl https://raw.githubusercontent.com/denshakhov/git-heatgrid/main/config.conf 
 - https://github.com/james-stoup/heatwave/ (Python) - Visualize your git commits with a heat map in the terminal.
 - https://github.com/ammsa/Githeat (Python) - Interactive heatmap for your git repos
 - https://github.com/abdullah-alaadine/git-commits-visualizer (Go) - Allows developers to scan their local Git repositories and generate a visual contributions graph.
+- https://github.com/aaossa/git-activity (Bash) - A custom git command to display an activity graph for the current git repository and branch.
 
 ## License
 
