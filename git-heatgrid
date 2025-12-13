@@ -298,7 +298,7 @@ function get_commits_per_day() {
     # We process all commits at once, because it's much faster than processing them year by year
     # The git output must be sorted, as the dates can sometimes be out of order
     # Returns lines formatted as "commits_count year day_of_year"
-    git -C "$config_repo_path" log "${git_options[@]}" --date=format:'%Y %-j' | sort -nr | uniq -c
+    git -c log.showSignature=false -C "$config_repo_path" log "${git_options[@]}" --date=format:'%Y %-j' | sort -nr | uniq -c
 }
 
 function print_years() {
