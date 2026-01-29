@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-01-29
+
 ### Added
 
 - Improve portability by removing dependency on the `date` utility
 - Improve macOS compatibility (by **[@MartinLyne](https://github.com/MartinLyne)**)
+
+### Fixed
+
+- Fixed an error that occurred when the Git configuration `log.showSignature` was enabled
 
 ## [1.1.0] - 2024-05-13
 
@@ -24,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release.
 
-[unreleased]: https://github.com/denshakhov/git-heatgrid/compare/1.1.0...HEAD
+[unreleased]: https://github.com/denshakhov/git-heatgrid/compare/1.2.0...HEAD
+[1.2.0]: https://github.com/denshakhov/git-heatgrid/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/denshakhov/git-heatgrid/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/denshakhov/git-heatgrid/releases/tag/1.0.0
